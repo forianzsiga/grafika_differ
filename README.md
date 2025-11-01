@@ -219,4 +219,4 @@ A parser a következőket olvassa ki:
 Ezeket a módosításokat a `automation_framework.py` fájlban végezd el.</span>
 
 ## Licenc
-Mittudom én, nem vagyok jogász, csak egy vibecoder mérnöktanonc. (Asszem MIT vagy valami hasonló.)
+MITtudom én, nem vagyok jogász, csak egy vibecoder mérnöktanonc.
