@@ -15,7 +15,7 @@ A programnak szüksége van egy olyan jól formattált stdout kimenetre, amely t
 
 Sajnos a hülye keretrendszer nem enged semmit importálni, így időmérést bele kell iktatni a programod loopjába:
 
-```
+```cpp
 namespace {
 	static double g_elapsedSeconds = 0.0;
 	static bool g_elapsedInitialized = false;
@@ -56,13 +56,13 @@ namespace {
 
 Elindításhoz hívd meg a `setAppStart()`-ot, a fő loop-ban pedig minden frame-ben hívd meg az `addElapsed(dt)`-t, ahol `dt` az előző frame óta eltelt idő másodpercben.
 
-```
+```cpp
 ...
 GreenTriangleApp() : glApp("Green triangle") { setAppStart(); }
 ...
 ```
 
-```
+```cpp
 ...
 void onTimeElapsed(float startTime, float endTime) override {
 	float dt = endTime - startTime;
