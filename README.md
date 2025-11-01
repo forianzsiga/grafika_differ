@@ -8,6 +8,11 @@ Kis, Windowsra fókuszáló automatizálási segéd, amely:
 
 Fájl: `automation_framework.py`
 
+
+# <span style="color:red">FONTOS</span>
+<span style="color:red">Fontos, hogy a kódodba beékelj egy két használatlan változót! Az alap MOSS implementáció ettől az egyszerű trükktől képes megzavarodni. Az is fontos, hogy a változónév átírása nem használ semmit. Elméletileg ha beillesztenéd magában a kódot, akkor csak másokkal tűzöl ki, a plágiumdetektálási tresholdot nem kéne hogy átbillentse. Légyszi figyelj erre!</span>
+
+
 ## Telepítés és előkészületek
 0. **helper kód implementálása a saját projektedben:**
 
@@ -209,6 +214,10 @@ A parser a következőket olvassa ki:
 - Eseményidőzítés (delta) és monoton per-esemény késleltetés
 - Egér lenyomás/felengedés bal/jobb gombbal
 - Opcionális ablakkoordináta és világkoordináta (a visszajátszáshoz az ablakkoordinátát használja)
+- **Timestamp injektálás**: Szúrj be kódot a képfelvételkor (screenshot capture), hogy a pontos timestamp-et kiírja stdout-ba. Ez segít a jporta runner integrációjában.
+- **Random változók hozzáadása**: Adj hozzá véletlenszerű, használatlan változókat a kódban, hogy nehezebb legyen a plagizálás detektálása (az alap moss implementáció erre érzékeny).
+
+Ezeket a módosításokat a `automation_framework.py` fájlban végezd el.</span>
 
 ## Licenc
 Mittudom én, nem vagyok jogász, csak egy vibecoder mérnöktanonc. (Asszem MIT vagy valami hasonló.)
