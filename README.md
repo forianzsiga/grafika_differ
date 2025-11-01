@@ -200,7 +200,7 @@ Vizuális segítség:
 - **Ablak nem található:** ellenőrizd a `--window-title` értékét, és hogy az EXE látható UI-t nyit-e a `--window-timeout` időn belül.
 - **Jogosultsági gondok:** ha más folyamat blokkolja az UI automatizálást, futtasd a terminált Rendszergazdaként.
 - **Hiányzó Tkinter:** az interaktív módhoz szükséges. A Windowsos Python telepítő tartalmazza; egyedi disztribúciónál engedélyezd/telepítsd.
-- **Lag:** Ha a grafika program elfoglal egy teljes magot, a visszajátszás és képkivágás közben a rendszer túlterhelődhet, ami késleltetést okozhat az események feldolgozásában. Próbáld meg növelni a `--capture-delay` értékét, vagy futtasd a grafika programot egy kevésbé terhelt környezetben. így sem garantált a pontos időzítés!
+- **Lag:** Ha a grafika program elfoglal egy teljes magot, a visszajátszás és képkivágás közben a rendszer túlterhelődhet, ami késleltetést okozhat az események feldolgozásában. Próbáld meg növelni a `--capture-delay` értékét, vagy futtasd a grafika programot egy kevésbé terhelt környezetben. így sem garantált a pontos időzítés! Erre egy másik megoldás lehet ha kérsz egy executablet, ahol a dt meg van szorozva egy kis értékkel, így a program „lassabban” fut, és több idő jut az események feldolgozására.
 
 ## Tranzkript formátum
 Példa eseménysorok (idők relatívak):
@@ -215,8 +215,6 @@ A parser a következőket olvassa ki:
 - Eseményidőzítés (delta) és monoton per-esemény késleltetés
 - Egér lenyomás/felengedés bal/jobb gombbal
 - Opcionális ablakkoordináta és világkoordináta (a visszajátszáshoz az ablakkoordinátát használja)
-- **Timestamp injektálás**: Szúrj be kódot a képfelvételkor (screenshot capture), hogy a pontos timestamp-et kiírja stdout-ba. Ez segít a jporta runner integrációjában.
-- **Random változók hozzáadása**: Adj hozzá véletlenszerű, használatlan változókat a kódban, hogy nehezebb legyen a plagizálás detektálása (az alap moss implementáció erre érzékeny).
 
 Ezeket a módosításokat a `automation_framework.py` fájlban végezd el.</span>
 
