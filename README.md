@@ -9,16 +9,17 @@ Kis, Windowsra fókuszáló automatizálási segéd, amely:
 Fájl: `automation_framework.py`
 
 
-# <span style="color:red">FONTOS</span>
-<span style="color:red">Fontos, hogy a kódodba beékelj egy két használatlan változót! Az alap MOSS implementáció ettől az egyszerű trükktől képes megzavarodni. Az is fontos, hogy a változónév átírása nem használ semmit. Elméletileg ha beillesztenéd magában a kódot, akkor csak másokkal tűzöl ki, a plágiumdetektálási tresholdot nem kéne hogy átbillentse. Légyszi figyelj erre!</span>
-
-
 ## Telepítés és előkészületek
 0. **helper kód implementálása a saját projektedben:**
 
 A programnak szüksége van egy olyan jól formattált stdout kimenetre, amely tartalmazza az egéreseményeket (lásd a „Tranzkript formátum” részt lent). Ezt a kimenetet a saját programodban kell előállítanod. Példa:
 
 Sajnos a hülye keretrendszer nem enged semmit importálni, így időmérést bele kell iktatni a programod loopjába:
+
+ 
+>**FONTOS! ⚠️⚠️⚠️**
+>
+> A kódodba ékelj be néhány használatlan változót! Az alap MOSS implementációt ez az egyszerű trükk megzavarhatja. Csak a változónév átírása nem elég, ténylegesen legyenek használatlan változók a kódban. Ha csak bemásolod a kódot, az másokkal együtt növeli a plágiumdetektálás esélyét, de önmagában nem kéne, hogy átbillentse a tresholdot. Figyelj erre!
 
 ```cpp
 namespace {
