@@ -33,6 +33,15 @@ Example usage::
     python automation_framework.py \
         --mode interactive \
         --inputs screenshots/run01 screenshots/run02 screenshots/comparison01
+
+    python automation_framework.py \
+        --mode stealth \
+        --exe glProgram/x64/Debug/GreenTriangle.exe \
+        --window-title "GreenTriangle" \
+        --output screenshots/run02 \
+        --capture-delay 0.05 \
+        --delta 50 \
+        --length 5000
 """
 
 from __future__ import annotations
@@ -240,6 +249,51 @@ class AutomationRunner:
             self._capture_window(window, self._next_capture_path("after_launch"))
             for event in events:
                 self._handle_event(window, event)
+            self._await_exit(process)
+        finally:
+            self._cleanup_process(process)
+
+    def run_stealth(self, delta_ms: int, length_ms: int) -> None:
+        """Launch the app and capture the window at a fixed interval for the given duration.
+
+        No input events are injected. Frames are captured every ``delta_ms`` milliseconds
+        for a total of ``length_ms`` milliseconds. An initial frame is captured after launch.
+        """
+        if not self.exe_path.exists():
+            raise FileNotFoundError(f"Executable not found: {self.exe_path}")
+        logging.info("Launching %s (stealth)", self.exe_path)
+        process = subprocess.Popen(
+            [str(self.exe_path)],
+            cwd=str(self.exe_path.parent),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            window = self._wait_for_window(process.pid)
+            logging.info("Window ready: %s", window)
+            time.sleep(self.launch_wait)
+            self._sleep_before_capture()
+            self._capture_window(window, self._next_capture_path("after_launch"))
+
+            start = time.time()
+            end_time = start + max(0.0, length_ms / 1000.0)
+            interval = max(1, int(delta_ms)) / 1000.0
+            next_ts = start
+            while True:
+                now = time.time()
+                if now >= end_time:
+                    break
+                # sleep until next tick
+                if now < next_ts:
+                    time.sleep(max(0.0, next_ts - now))
+                self._sleep_before_capture()
+                label = f"stealth_{int((time.time() - start)*1000):07d}ms"
+                self._capture_window(window, self._next_capture_path(label))
+                next_ts += interval
+
+            # capture a final frame at end
+            self._sleep_before_capture()
+            self._capture_window(window, self._next_capture_path("after_stealth"))
             self._await_exit(process)
         finally:
             self._cleanup_process(process)
@@ -625,12 +679,17 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Replay recorded UI script against an executable.")
     parser.add_argument(
         "--mode",
-        choices=["script", "comparison", "interactive"],
+        choices=["script", "comparison", "interactive", "stealth"],
         default="script",
-        help="Execution mode: 'script' replays events, 'comparison' diffs two runs, 'interactive' opens viewer",
+        help=(
+            "Execution mode: 'script' replays events, 'comparison' diffs two runs, "
+            "'interactive' opens viewer, 'stealth' captures frames at fixed intervals"
+        ),
     )
     parser.add_argument("--script", type=Path, help="Path to the recorded event transcript")
     parser.add_argument("--exe", type=Path, help="Path to the target executable")
+    # Optional positional exe path primarily for convenience in stealth mode
+    parser.add_argument("positional_exe", nargs="?", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--window-title", dest="window_title", help="Exact window title to focus; defaults to top window")
     parser.add_argument(
         "--screenshots",
@@ -680,6 +739,18 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Extra delay in seconds before each screenshot to let frames settle",
     )
     parser.add_argument(
+        "--delta",
+        type=int,
+        default=50,
+        help="Stealth mode: capture interval in milliseconds",
+    )
+    parser.add_argument(
+        "--length",
+        type=int,
+        default=5000,
+        help="Stealth mode: total capture duration in milliseconds",
+    )
+    parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
@@ -702,6 +773,28 @@ def main(argv: Optional[List[str]] = None) -> None:
         if args.output is None:
             raise SystemExit("Comparison mode requires an --output directory")
         _run_comparison(list(args.inputs), args.output)
+        return
+
+    # Allow positional exe path as a convenience (especially for stealth example)
+    if args.exe is None and getattr(args, "positional_exe", None) is not None:
+        args.exe = args.positional_exe
+
+    if args.mode == "stealth":
+        if args.exe is None:
+            raise SystemExit("Stealth mode requires --exe (or a positional exe path) pointing to the target executable")
+        _configure_pyautogui()
+        output_dir = args.output or args.screenshots
+        runner = AutomationRunner(
+            exe_path=args.exe,
+            window_title=args.window_title,
+            screenshot_dir=output_dir,
+            launch_wait=args.launch_wait,
+            window_timeout=args.window_timeout,
+            exit_timeout=args.exit_timeout,
+            pointer_duration=args.pointer_duration,
+            capture_delay=args.capture_delay,
+        )
+        runner.run_stealth(delta_ms=args.delta, length_ms=args.length)
         return
 
     if args.script is None:

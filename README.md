@@ -12,14 +12,18 @@ Fájl: `automation_framework.py`
 ## Telepítés és előkészületek
 0. **helper kód implementálása a saját projektedben:**
 
-A programnak szüksége van egy olyan jól formattált stdout kimenetre, amely tartalmazza az egéreseményeket (lásd a „Tranzkript formátum” részt lent). Ezt a kimenetet a saját programodban kell előállítanod. Példa:
+A programnak szüksége van egy olyan jól formattált stdout kimenetre, amely tartalmazza az egéreseményeket (lásd a „transzkript formátum” részt lent). Ezt a kimenetet a saját programodban kell előállítanod. Példa:
 
 Sajnos a hülye keretrendszer nem enged semmit importálni, így időmérést bele kell iktatni a programod loopjába:
 
  
 >**FONTOS! ⚠️⚠️⚠️**
->
-> A kódodba ékelj be néhány használatlan változót! Az alap MOSS implementációt ez az egyszerű trükk megzavarhatja. Csak a változónév átírása nem elég, ténylegesen legyenek használatlan változók a kódban. Ha csak bemásolod a kódot, az másokkal együtt növeli a plágiumdetektálás esélyét, de önmagában nem kéne, hogy átbillentse a tresholdot. Figyelj erre!
+
+> Ha nem Stealth módban futtatod a programot, azaz tervezed a beillesztett kódot feltölteni, a kódodba ékelj be néhány használatlan változót! Az alap MOSS implementációt ez az egyszerű trükk megzavarhatja. Csak a változónév átírása nem elég, ténylegesen legyenek használatlan változók a kódban. Ha csak bemásolod a kódot, az másokkal együtt növeli a plágiumdetektálás esélyét, de önmagában nem kéne, hogy átbillentse a tresholdot. Figyelj erre!
+
+>Emellett ha valaki már az adott házihoz futtatott nem stealth módban sikeres feladatot, akkor el is tudod csak kérni az stdout kimenetet tőle, így nem kell a kódodba beépíteni ezt a részt!
+
+>Ha nincs ilyenre lehetőséged, és nem is akarsz kockázatot vállalni, írhatsz magadtól is egy event.txt fájlt a transzkript formátum alapján, és azt használhatod a script módhoz.
 
 ```cpp
 namespace {
@@ -129,13 +133,27 @@ python automation_framework.py --mode comparison --inputs .\screenshots\run01 .\
 python automation_framework.py --mode interactive --inputs .\screenshots\run01 .\screenshots\run02 .\screenshots\comparison01
 ```
 
+### Stealth mód (kód injektálás nélkül)
+
+Ha nem szeretnél a saját programodba időbélyeget/naplózást injektálni, használhatod a stealth módot, ami egyszerűen csak képkivágásokat készít megadott időközönként egy adott időtartamon keresztül.
+
+Példa (5 másodpercig, 50 ms periódussal, 0.05 s extra késleltetéssel minden képkivágás előtt):
+
+```powershell
+# Rövid forma: az EXE útvonal megadható pozicionális argumentumként is
+python automation_framework.py --mode stealth .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05 --delta 50 --length 5000
+
+# Hivatalos forma: --exe kapcsolóval
+python automation_framework.py --mode stealth --exe .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05 --delta 50 --length 5000
+```
+
 ## Módok
 
 ### script
-Szöveges tranzkriptből visszajátssza az egéreseményeket, fókuszálja a célt ablakot, a felvett kliens-területi koordinátákra kattint, és minden esemény után képernyőképet ment (indítás után és kilépés előtt is).
+Szöveges transzkriptből visszajátssza az egéreseményeket, fókuszálja a célt ablakot, a felvett kliens-területi koordinátákra kattint, és minden esemény után képernyőképet ment (indítás után és kilépés előtt is).
 
 Kötelező paraméterek:
-- `--script PATH` — tranzkript fájl (pl. `events.txt`)
+- `--script PATH` — transzkript fájl (pl. `events.txt`)
 - `--exe PATH` — a `GreenTriangle.exe` elérési útja
 
 Hasznos paraméterek:
@@ -186,6 +204,21 @@ Vizuális segítség:
 - Split módban egy sárga függőleges vonal jelöli a pontos elválasztási pozíciót.
 - A kurzor split módban vízszintes átméretezésre vált a jobb érthetőségért.
 
+### stealth
+Kód injektálása nélkül képkockákat rögzít az alkalmazás kliens-területéről állandó időközönként.
+
+Kötelező/hasznos paraméterek:
+- `--exe PATH` — a cél `GreenTriangle.exe` elérési útja (stealth módban pozicionálisan is megadható az `--exe` helyett)
+- `--window-title TEXT` — a főablak pontos címe (ha üres, a legfelső ablakot keresi)
+- `--output DIR` — a képernyőképek célkönyvtára (alapból a `--screenshots` értéke)
+- `--delta INT(ms)` — képkivágások közti időköz milliszekundumban (alapértelmezés: 50)
+- `--length INT(ms)` — teljes rögzítési idő milliszekundumban (alapértelmezés: 5000)
+- `--capture-delay FLOAT` — extra várakozás másodpercben minden képkivágás előtt (pl. `0.05`)
+
+Viselkedés:
+- Indítás után készít egy kezdeti képet (`after_launch`), majd `--delta` szerint időzíti a rögzítést a megadott `--length` időtartamig, végül egy záró képet (`after_stealth`).
+- Elsődlegesen a kliens-területet vágja ki; hiba esetén teljes ablakra vagy teljes képernyőre esik vissza.
+
 ## Tippek stabil, megismételhető képkivágáshoz
 
 - Használd a kliens-területi kivágást (alapértelmezett); az OS felület és értesítések zajt vihetnek a képekbe.
@@ -202,7 +235,7 @@ Vizuális segítség:
 - **Hiányzó Tkinter:** az interaktív módhoz szükséges. A Windowsos Python telepítő tartalmazza; egyedi disztribúciónál engedélyezd/telepítsd.
 - **Lag:** Ha a grafika program elfoglal egy teljes magot, a visszajátszás és képkivágás közben a rendszer túlterhelődhet, ami késleltetést okozhat az események feldolgozásában. Próbáld meg növelni a `--capture-delay` értékét, vagy futtasd a grafika programot egy kevésbé terhelt környezetben. így sem garantált a pontos időzítés! Erre egy másik megoldás lehet ha kérsz egy executablet, ahol a dt meg van szorozva egy kis értékkel, így a program „lassabban” fut, és több idő jut az események feldolgozására.
 
-## Tranzkript formátum
+## Transzkript formátum
 Példa eseménysorok (idők relatívak):
 
 ```
@@ -216,7 +249,7 @@ A parser a következőket olvassa ki:
 - Egér lenyomás/felengedés bal/jobb gombbal
 - Opcionális ablakkoordináta és világkoordináta (a visszajátszáshoz az ablakkoordinátát használja)
 
-Ezeket a módosításokat a `automation_framework.py` fájlban végezd el.</span>
+Ezeket a módosításokat a `automation_framework.py` fájlban végezd el.
 
 ## Licenc
 MITtudom én, nem vagyok jogász, csak egy vibecoder mérnöktanonc.
