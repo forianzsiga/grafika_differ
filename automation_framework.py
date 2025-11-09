@@ -1,5 +1,7 @@
 """Automation framework for replaying recorded mouse scripts against the GreenTriangle demo.
 
+Cross-platform automation that works on both Windows and Linux/X11.
+
 This script expects an input transcript of interaction events such as::
 
     [ +0.370s ] onMousePressed L: window(100,100) -> world(-16.666666,16.666666)
@@ -13,8 +15,15 @@ screenshots between events, and stores a dedicated window capture when the appli
 
 Required third-party packages (install with ``pip``):
     - pyautogui
-    - pywinauto
     - pillow (pulled in automatically by pyautogui but listed for clarity)
+    
+Windows-specific:
+    - pywinauto
+    
+Linux/X11-specific:
+    - python-xlib
+    - psutil
+    - xdotool (recommended for better input handling)
 
 Example usage::
 
@@ -48,6 +57,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import platform
 import re
 import subprocess
 import sys
@@ -66,17 +76,40 @@ except Exception:  # pragma: no cover - tkinter may be missing in some environme
 
 try:
     import pyautogui
-    from pywinauto import Application
-    from pywinauto.findwindows import ElementNotFoundError
-    from pywinauto.timings import TimeoutError as PyWinTimeoutError
-except ImportError as exc:  # pragma: no cover - import guard for missing optional deps
-    missing = (
-        "pyautogui, pywinauto, pillow"
-    )
+    from PIL import Image
+except ImportError as exc:
+    missing = "pyautogui, pillow"
     raise SystemExit(
         "Missing required dependency. Install with 'pip install %s'. Original error: %s"
         % (missing, exc)
     )
+
+# Platform detection
+IS_WINDOWS = platform.system().lower() == "windows"
+IS_LINUX = platform.system().lower() == "linux"
+
+# Import platform-specific dependencies
+if IS_WINDOWS:
+    try:
+        from pywinauto import Application
+        from pywinauto.findwindows import ElementNotFoundError
+        from pywinauto.timings import TimeoutError as PyWinTimeoutError
+    except ImportError as exc:
+        missing = "pywinauto"
+        raise SystemExit(
+            "Missing Windows-specific dependency. Install with 'pip install pywinauto'. Original error: %s" % exc
+        )
+elif IS_LINUX:
+    try:
+        from Xlib import X, display
+        import psutil
+        # Import our X11 automation module
+        from x11_automation import X11WindowManager, X11Screenshot, X11Input, ProcessManager, setup_linux_environment
+    except ImportError as exc:
+        missing = "python-xlib, psutil"
+        raise SystemExit(
+            "Missing Linux-specific dependency. Install with 'pip install python-xlib psutil'. Original error: %s" % exc
+        )
 
 
 def _configure_pyautogui() -> None:
@@ -230,25 +263,62 @@ class AutomationRunner:
         self.capture_delay = capture_delay
         self.screenshot_dir.mkdir(parents=True, exist_ok=True)
         self._capture_index = 0
+        
+        # Initialize platform-specific components
+        if IS_WINDOWS:
+            self.window_manager = None  # Will be created per window
+        elif IS_LINUX:
+            # Setup Linux environment
+            if not setup_linux_environment():
+                raise RuntimeError("Linux/X11 environment not properly configured")
+            self.window_manager = X11WindowManager()
+            self.screenshot_handler = X11Screenshot()
+            self.input_handler = X11Input()
+            self.process_manager = ProcessManager()
 
     def run(self, events: Iterable[Event]) -> None:
         if not self.exe_path.exists():
             raise FileNotFoundError(f"Executable not found: {self.exe_path}")
         logging.info("Launching %s", self.exe_path)
-        process = subprocess.Popen(
-            [str(self.exe_path)],
-            cwd=str(self.exe_path.parent),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        
+        # Launch the process
+        if IS_WINDOWS:
+            process = subprocess.Popen(
+                [str(self.exe_path)],
+                cwd=str(self.exe_path.parent),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:  # Linux
+            process = subprocess.Popen(
+                [str(self.exe_path)],
+                cwd=str(self.exe_path.parent),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=lambda: None  # Ensure process doesn't inherit X11 session
+            )
+        
         try:
-            window = self._wait_for_window(process.pid)
+            if IS_WINDOWS:
+                window = self._wait_for_window(process.pid)
+            else:  # Linux
+                window = self._wait_for_window_linux(process.pid)
+                
             logging.info("Window ready: %s", window)
             time.sleep(self.launch_wait)
             self._sleep_before_capture()
-            self._capture_window(window, self._next_capture_path("after_launch"))
+            
+            if IS_WINDOWS:
+                self._capture_window(window, self._next_capture_path("after_launch"))
+            else:  # Linux
+                self._capture_window_linux(window, self._next_capture_path("after_launch"))
+                
             for event in events:
-                self._handle_event(window, event)
+                if IS_WINDOWS:
+                    self._handle_event(window, event)
+                else:  # Linux
+                    self._handle_event_linux(window, event)
+                    
             self._await_exit(process)
         finally:
             self._cleanup_process(process)
@@ -262,18 +332,38 @@ class AutomationRunner:
         if not self.exe_path.exists():
             raise FileNotFoundError(f"Executable not found: {self.exe_path}")
         logging.info("Launching %s (stealth)", self.exe_path)
-        process = subprocess.Popen(
-            [str(self.exe_path)],
-            cwd=str(self.exe_path.parent),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        
+        # Launch the process
+        if IS_WINDOWS:
+            process = subprocess.Popen(
+                [str(self.exe_path)],
+                cwd=str(self.exe_path.parent),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:  # Linux
+            process = subprocess.Popen(
+                [str(self.exe_path)],
+                cwd=str(self.exe_path.parent),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=lambda: None
+            )
+        
         try:
-            window = self._wait_for_window(process.pid)
+            if IS_WINDOWS:
+                window = self._wait_for_window(process.pid)
+            else:  # Linux
+                window = self._wait_for_window_linux(process.pid)
+                
             logging.info("Window ready: %s", window)
             time.sleep(self.launch_wait)
             self._sleep_before_capture()
-            self._capture_window(window, self._next_capture_path("after_launch"))
+            
+            if IS_WINDOWS:
+                self._capture_window(window, self._next_capture_path("after_launch"))
+            else:  # Linux
+                self._capture_window_linux(window, self._next_capture_path("after_launch"))
 
             start = time.time()
             end_time = start + max(0.0, length_ms / 1000.0)
@@ -288,12 +378,21 @@ class AutomationRunner:
                     time.sleep(max(0.0, next_ts - now))
                 self._sleep_before_capture()
                 label = f"stealth_{int((time.time() - start)*1000):07d}ms"
-                self._capture_window(window, self._next_capture_path(label))
+                
+                if IS_WINDOWS:
+                    self._capture_window(window, self._next_capture_path(label))
+                else:  # Linux
+                    self._capture_window_linux(window, self._next_capture_path(label))
+                    
                 next_ts += interval
 
             # capture a final frame at end
             self._sleep_before_capture()
-            self._capture_window(window, self._next_capture_path("after_stealth"))
+            if IS_WINDOWS:
+                self._capture_window(window, self._next_capture_path("after_stealth"))
+            else:  # Linux
+                self._capture_window_linux(window, self._next_capture_path("after_stealth"))
+                
             self._await_exit(process)
         finally:
             self._cleanup_process(process)
@@ -410,14 +509,6 @@ class AutomationRunner:
             logging.debug("Unable to obtain client region: %s", exc)
             return None
 
-    def _await_exit(self, process: subprocess.Popen) -> None:
-        if self.exit_timeout <= 0:
-            return
-        try:
-            process.wait(timeout=self.exit_timeout)
-        except subprocess.TimeoutExpired:
-            logging.warning("Process did not exit within %.1f seconds", self.exit_timeout)
-
     def _cleanup_process(self, process: subprocess.Popen) -> None:
         if process.poll() is None:
             logging.info("Terminating process %s", process.pid)
@@ -427,6 +518,115 @@ class AutomationRunner:
             except subprocess.TimeoutExpired:
                 logging.info("Force killing hung process %s", process.pid)
                 process.kill()
+
+    # Linux-specific methods
+    def _wait_for_window_linux(self, pid: int):
+        """Wait for window on Linux using X11."""
+        deadline = time.time() + self.window_timeout
+        while time.time() < deadline:
+            try:
+                # Try to find window by title or by process
+                if self.window_title:
+                    window_id = self.window_manager.find_window_by_title(self.window_title)
+                else:
+                    # Find any window created by this process
+                    window_id = self._find_window_by_process_linux(pid)
+                
+                if window_id:
+                    # Focus the window
+                    if self.window_manager.focus_window(window_id):
+                        return window_id
+                        
+                time.sleep(0.2)
+            except Exception as exc:
+                logging.debug("Window lookup retry due to: %s", exc)
+                time.sleep(0.2)
+        raise TimeoutError(f"Failed to locate window within {self.window_timeout} seconds")
+
+    def _find_window_by_process_linux(self, pid: int) -> Optional[int]:
+        """Find window by process ID on Linux."""
+        try:
+            # Try to find window by looking for windows created by the process
+            windows = self.window_manager._get_window_tree()
+            for window_id, window_info in windows.items():
+                # This is a simplified approach - in practice, you might need
+                # to track window creation from the process
+                if self.window_title and window_info.get('name'):
+                    if self.window_title.lower() in window_info['name'].lower():
+                        return window_id
+        except Exception as e:
+            logging.debug(f"Error finding window by process {pid}: {e}")
+        return None
+
+    def _handle_event_linux(self, window_id: int, event: Event) -> None:
+        """Handle event on Linux using X11."""
+        logging.info("Event %03d: %s", event.index, event.raw)
+        if event.delta > 0:
+            time.sleep(event.delta)
+        if event.action == "mouse_press":
+            self._send_mouse_linux(window_id, event, press=True)
+        elif event.action == "mouse_release":
+            self._send_mouse_linux(window_id, event, press=False)
+        elif event.action == "exit":
+            exit_path = self._event_screenshot_path(event)
+            self._sleep_before_capture()
+            self._capture_window_linux(window_id, exit_path)
+            try:
+                self.window_manager.close_window(window_id)
+            except Exception as exc:
+                logging.debug("Window close via X11 failed: %s", exc)
+            return
+        else:
+            logging.warning("Unhandled event action: %s", event.action)
+        screenshot_path = self._event_screenshot_path(event)
+        self._sleep_before_capture()
+        self._capture_window_linux(window_id, screenshot_path)
+
+    def _send_mouse_linux(self, window_id: int, event: Event, press: bool) -> None:
+        """Send mouse event on Linux using X11."""
+        coords = None
+        if event.window_point:
+            coords = event.window_point
+        if coords:
+            if self.pointer_duration > 0:
+                self.input_handler.move_mouse(coords[0], coords[1], duration=self.pointer_duration)
+            else:
+                self.input_handler.move_mouse(coords[0], coords[1])
+        
+        button = event.button or "left"
+        if press:
+            self.input_handler.mouse_press(button)
+        else:
+            self.input_handler.mouse_release(button)
+
+    def _capture_window_linux(self, window_id: int, path: Path) -> None:
+        """Capture window on Linux using X11."""
+        logging.debug("Capturing window %s to %s", window_id, path)
+        success = self.screenshot_handler.capture_window(window_id, path)
+        if not success:
+            logging.warning("Window capture failed, falling back to full screen")
+            self.screenshot_handler.capture_screen(path)
+
+    def _await_exit(self, process: subprocess.Popen) -> None:
+        """Wait for process exit (cross-platform)."""
+        if self.exit_timeout <= 0:
+            return
+        try:
+            if IS_WINDOWS:
+                process.wait(timeout=self.exit_timeout)
+            else:  # Linux
+                if hasattr(self, 'process_manager'):
+                    # Use psutil for more reliable process checking on Linux
+                    start_time = time.time()
+                    while time.time() - start_time < self.exit_timeout:
+                        if not self.process_manager.is_process_running(process.pid):
+                            return
+                        time.sleep(0.1)
+                    logging.warning("Process did not exit within %.1f seconds", self.exit_timeout)
+                else:
+                    process.wait(timeout=self.exit_timeout)
+        except subprocess.TimeoutExpired:
+            logging.warning("Process did not exit within %.1f seconds", self.exit_timeout)
 
 
 def _run_comparison(inputs: List[Path], output_dir: Path) -> None:

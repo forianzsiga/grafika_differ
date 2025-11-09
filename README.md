@@ -1,15 +1,21 @@
 # GreenTriangle automatizációs keretrendszer
 
-Kis, Windowsra fókuszáló automatizálási segéd, amely:
+Cross-platform automatizálási keretrendszer, amely támogatja mind a Windows-t, mind a Linux/X11-et:
 
 - Rögzített egéresemény-szkripteket játszik vissza a grafika háziddal (script mód)
 - Két képrögzítési futás képeit hasonlítja össze pixelenkénti abszolút különbséggel (comparison mód)
-- Interaktív nézőt nyit a két futás (és opcionális diff) megtekintéséhez egymás melletti, átfedéses és „split” nézettel (interactive mód)
+- Interaktív nézőt nyit a két futás (és opcionális diff) megtekintéséhez egymás melletti, átfedéses és „split" nézettel (interactive mód)
+
+Platform támogatás:
+- **Windows**: pywinauto és Windows UI automation
+- **Linux**: X11 automation with python-xlib, psutil, és xdotool
 
 Fájl: `automation_framework.py`
 
 
 ## Telepítés és előkészületek
+
+### Windows
 0. **helper kód implementálása a saját projektedben:**
 
 A programnak szüksége van egy olyan jól formattált stdout kimenetre, amely tartalmazza az egéreseményeket (lásd a „transzkript formátum” részt lent). Ezt a kimenetet a saját programodban kell előállítanod. Példa:
@@ -94,10 +100,39 @@ Emellett fontos, hogy az stdoutra íráshoz használd a `debugPrintf`-et!
 
 1. **Függőségek telepítése:**
 
+#### Windows
 Futtasd a `create_venv_and_install.bat` fájlt a virtuális környezet létrehozásához és a függőségek telepítéséhez. Ez megnyit egy új PowerShell ablakot az aktivált környezettel, ahol futtathatod a parancsokat.
 
 ```powershell
 .\create_venv_and_install.bat
+```
+
+#### Linux
+Futtasd a `create_venv_and_install.sh` fájlt vagy használd a `run_automation.sh` launchert:
+
+```bash
+# Válassz egyet:
+./create_venv_and_install.sh
+# vagy
+./run_automation.sh --help
+```
+
+Linux függőségek:
+- **X11 szerver**: Győződj meg róla, hogy az X11 szerver fut (többnyire alapértelmezett Linux desktop környezetekben)
+- **Screenshot eszközök**: `scrot`, `imagemagick` vagy `xwd` (legalább egy szükséges)
+- **Input eszköz**: `xdotool` (ajánlott jobb megbízhatóságért)
+- **System packages**: A Python csomagok telepítése előtt:
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install python3-venv python3-dev scrot imagemagick xdotool
+
+# Fedora/RHEL
+sudo dnf install python3-venv python3-devel scrot ImageMagick xdotool
+
+# Arch Linux
+sudo pacman -S python-venv python-devtools scrot imagemagick xdotool
 ```
 
 2. **Eventek kinyerése:**
@@ -107,8 +142,9 @@ JPortán megtalálható stdout kimenetet mentsd le egy fájlba. Az itteni kimene
 
 ## Használati példa
 
-Először futtasd a `create_venv_and_install.bat` fájlt a környezet beállításához. Ez után minden parancsot az új PowerShell ablakban futtass, ahol a virtuális környezet aktiválva van.
+Először futtasd a megfelelő scriptet a környezet beállításához. Ez után minden parancsot a terminálban futtass, ahol a virtuális környezet aktiválva van.
 
+### Windows
 2) **Futtasd a script módot az események visszajátszásához és képernyőképek mentéséhez:**
 
 ```powershell
@@ -133,18 +169,53 @@ python automation_framework.py --mode comparison --inputs .\screenshots\run01 .\
 python automation_framework.py --mode interactive --inputs .\screenshots\run01 .\screenshots\run02 .\screenshots\comparison01
 ```
 
+### Linux
+2) **Futtasd a script módot az események visszajátszásához és képernyőképek mentéséhez:**
+
+```bash
+./run_automation.sh --mode script --script events.txt --exe ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run01 --capture-delay 0.05
+```
+
+3) **Ismételd meg a második futáshoz:**
+
+```bash
+./run_automation.sh --mode script --script events.txt --exe ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run02 --capture-delay 0.05
+```
+
+4) **Készíts képenkénti abszolút különbségeket:**
+
+```bash
+./run_automation.sh --mode comparison --inputs ./screenshots/run01 ./screenshots/run02 --output ./screenshots/comparison01
+```
+
+5) **Nézd meg interaktívan:**
+
+```bash
+./run_automation.sh --mode interactive --inputs ./screenshots/run01 ./screenshots/run02 ./screenshots/comparison01
+```
+
 ### Stealth mód (kód injektálás nélkül)
 
 Ha nem szeretnél a saját programodba időbélyeget/naplózást injektálni, használhatod a stealth módot, ami egyszerűen csak képkivágásokat készít megadott időközönként egy adott időtartamon keresztül.
 
 Példa (5 másodpercig, 50 ms periódussal, 0.05 s extra késleltetéssel minden képkivágás előtt):
 
+#### Windows
 ```powershell
 # Rövid forma: az EXE útvonal megadható pozicionális argumentumként is
 python automation_framework.py --mode stealth .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05 --delta 50 --length 5000
 
 # Hivatalos forma: --exe kapcsolóval
 python automation_framework.py --mode stealth --exe .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05 --delta 50 --length 5000
+```
+
+#### Linux
+```bash
+# Rövid forma: az EXE útvonal megadható pozicionális argumentumként is
+./run_automation.sh --mode stealth ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run02 --capture-delay 0.05 --delta 50 --length 5000
+
+# Hivatalos forma: --exe kapcsolóval
+./run_automation.sh --mode stealth --exe ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run02 --capture-delay 0.05 --delta 50 --length 5000
 ```
 
 ## Módok
@@ -212,7 +283,7 @@ Kötelező/hasznos paraméterek:
 - `--window-title TEXT` — a főablak pontos címe (ha üres, a legfelső ablakot keresi)
 - `--output DIR` — a képernyőképek célkönyvtára (alapból a `--screenshots` értéke)
 - `--delta INT(ms)` — képkivágások közti időköz milliszekundumban (alapértelmezés: 50)
-- `--length INT(ms)` — teljes rögzítési idő milliszekundumban (alapértelmezés: 5000)
+- `--length INT(ms)` — teljes rögzítési idő milliszekundában (alapértelmezés: 5000)
 - `--capture-delay FLOAT` — extra várakozás másodpercben minden képkivágás előtt (pl. `0.05`)
 
 Viselkedés:
@@ -235,6 +306,14 @@ Viselkedés:
 - **Hiányzó Tkinter:** az interaktív módhoz szükséges. A Windowsos Python telepítő tartalmazza; egyedi disztribúciónál engedélyezd/telepítsd.
 - **Lag:** Ha a grafika program elfoglal egy teljes magot, a visszajátszás és képkivágás közben a rendszer túlterhelődhet, ami késleltetést okozhat az események feldolgozásában. Próbáld meg növelni a `--capture-delay` értékét, vagy futtasd a grafika programot egy kevésbé terhelt környezetben. így sem garantált a pontos időzítés! Erre egy másik megoldás lehet ha kérsz egy executablet, ahol a dt meg van szorozva egy kis értékkel, így a program „lassabban” fut, és több idő jut az események feldolgozására.
 
+### Linux/X11 hibák
+- **"DISPLAY environment variable not set":** Győződj meg róla, hogy X11 szerver fut. Ha SSH-n keresztül dolgozol, használd az `-X` vagy `-Y` kapcsolót (`ssh -X user@host`).
+- **"No screenshot tool available":** Telepíts legalább egy screenshot eszközt: `sudo apt install scrot` vagy `sudo apt install imagemagick`.
+- **"xdotool not found":** Telepítsd a `xdotool`-t: `sudo apt install xdotool` (ajánlott jobb input kezelésért).
+- **"Failed to locate window":** Ellenőrizd a `--window-title` értékét. Linux-on a pontos ablakcím szükséges. Használd a `xprop` eszközt az ablak információk lekéréséhez: `xprop WM_NAME`.
+- **Permission denied a képernyőképek mentésénél:** Győződj meg róla, hogy van írási jogod a célkönyvtárban.
+- **X11 hiba: BadWindow:** Ez általában akkor történik, ha az ablak bezáródik az automatizálás közben. Növeld a `--window-timeout` értékét.
+
 ## Transzkript formátum
 Példa eseménysorok (idők relatívak):
 
@@ -250,6 +329,130 @@ A parser a következőket olvassa ki:
 - Opcionális ablakkoordináta és világkoordináta (a visszajátszáshoz az ablakkoordinátát használja)
 
 Ezeket a módosításokat a `automation_framework.py` fájlban végezd el.
+
+## AI-alapú képelemzés (OpenRouter integráció)
+
+A `image_analysis_openrouter.py` szkript OpenRouter API-n keresztül használja a Gemini 2.5 Pro modellt a képek közötti különbségek részletes szöveges leírásához. Ez lehetővé teszi, hogy nem-multimodális LLM-ek is elemezzék a vizuális változásokat.
+
+### Telepítés és beállítás
+
+1. **API kulcs beszerzése:**
+   - Regisztrálj az [OpenRouter](https://openrouter.ai/) oldalon
+   - Generálj egy API kulcsot
+   - Állítsd be környezeti változóként: `export OPENROUTER_API_KEY=your_key_here`
+
+2. **Függőségek:**
+   A `requests` csomag szükséges, ami már szerepel a `requirements.txt`-ben.
+
+### Használat
+
+#### Alapvető használat (környezeti változóból származó API kulccsal)
+```bash
+export OPENROUTER_API_KEY=your_key_here
+
+python image_analysis_openrouter.py \
+    --inputs screenshots/run01 screenshots/run02 \
+    --output analysis_results
+```
+
+#### API kulcs parancssorból
+```bash
+python image_analysis_openrouter.py \
+    --api-key your_key_here \
+    --inputs screenshots/run01 screenshots/run02 \
+    --output analysis_results
+```
+
+#### Különbségi képekkel együtt
+```bash
+python image_analysis_openrouter.py \
+    --api-key your_key_here \
+    --inputs screenshots/run01 screenshots/run02 \
+    --diff-dir screenshots/comparison01 \
+    --output analysis_results
+```
+
+#### Egyéni modell és prompt
+```bash
+python image_analysis_openrouter.py \
+    --api-key your_key_here \
+    --inputs screenshots/run01 screenshots/run02 \
+    --output analysis_results \
+    --model google/gemini-2.0-flash-thinking-exp:free \
+    --prompt "Csak a színbeli különbségeket írd le részletesen"
+```
+
+### Kimenet
+
+A szkript minden képpárhoz létrehoz egy `*_analysis.txt` fájlt a megadott kimeneti könyvtárban. Minden fájl tartalmazza:
+
+1. **Metaadat fejléc:** A vizsgált képek elérési útjai
+2. **Részletes elemzés:**
+   - Vizuális különbségek (pozíció, szín, megjelenés)
+   - Szemantikus jelentés (mit reprezentálnak a változások)
+   - Kvantitatív megfigyelések (méretek, elmozdulások)
+   - Különbségi kép elemzése (ha elérhető)
+
+Emellett létrejön egy `_summary.txt` fájl, amely összefoglalja az összes elemzést.
+
+### Paraméterek
+
+- `--api-key`: OpenRouter API kulcs (opcionális, ha `OPENROUTER_API_KEY` környezeti változó be van állítva)
+- `--inputs DIR_A DIR_B`: Két bemeneti könyvtár az összehasonlítandó képekkel (kötelező)
+- `--diff-dir DIR`: Opcionális könyvtár a különbségi képekkel (amelyeket a `comparison` mód generált)
+- `--output DIR`: Kimeneti könyvtár az elemzési szövegfájlok számára (kötelező)
+- `--model NAME`: OpenRouter modell neve (alapértelmezett: `google/gemini-2.0-flash-thinking-exp:free`)
+- `--prompt TEXT`: Egyéni prompt az elemzéshez (opcionális)
+- `--rate-limit FLOAT`: Késleltetés az API kérések között másodpercben (alapértelmezett: 1.0)
+- `--log-level LEVEL`: Naplózási szint (DEBUG, INFO, WARNING, ERROR)
+
+### Tipikus munkafolyamat
+
+1. **Képek generálása:**
+   ```bash
+   # Első futás
+   ./run_automation.sh --mode script --script events.txt \
+       --exe ./GreenTriangle --window-title "Green triangle" \
+       --output ./screenshots/run01 --capture-delay 0.05
+
+   # Második futás
+   ./run_automation.sh --mode script --script events.txt \
+       --exe ./GreenTriangle --window-title "Green triangle" \
+       --output ./screenshots/run02 --capture-delay 0.05
+   ```
+
+2. **Különbségek generálása:**
+   ```bash
+   ./run_automation.sh --mode comparison \
+       --inputs ./screenshots/run01 ./screenshots/run02 \
+       --output ./screenshots/comparison01
+   ```
+
+3. **AI elemzés futtatása:**
+   ```bash
+   export OPENROUTER_API_KEY=your_key_here
+   python image_analysis_openrouter.py \
+       --inputs screenshots/run01 screenshots/run02 \
+       --diff-dir screenshots/comparison01 \
+       --output analysis_results
+   ```
+
+4. **Eredmények áttekintése:**
+   ```bash
+   # Összefoglaló megtekintése
+   cat analysis_results/_summary.txt
+   
+   # Egyedi elemzések olvasása
+   cat analysis_results/000_0000_after_launch_analysis.txt
+   ```
+
+### Megjegyzések
+
+- A szkript PNG formátumú képeket dolgoz fel
+- Az API kérések között 1 másodperc késleltetés van a rate limiting miatt (módosítható a `--rate-limit` paraméterrel)
+- A modell részletes, formázatlan szöveget generál, amely könnyen feldolgozható nem-multimodális LLM-ek által
+- A különbségi képek opcionálisak, de segítik a pontosabb elemzést
+- Az elemzések UTF-8 kódolású szöveges fájlokban kerülnek mentésre
 
 ## Licenc
 MITtudom én, nem vagyok jogász, csak egy vibecoder mérnöktanonc.
