@@ -1,35 +1,66 @@
-# GreenTriangle automatizációs keretrendszer
+# Grafika Differ - Image Analysis Framework
 
-Cross-platform automatizálási keretrendszer, amely támogatja mind a Windows-t, mind a Linux/X11-et:
+Cross-platform automation framework with support for both Windows and Linux/X11:
 
-- Rögzített egéresemény-szkripteket játszik vissza a grafika háziddal (script mód)
-- Két képrögzítési futás képeit hasonlítja össze pixelenkénti abszolút különbséggel (comparison mód)
-- Interaktív nézőt nyit a két futás (és opcionális diff) megtekintéséhez egymás melletti, átfedéses és „split" nézettel (interactive mód)
+- Replays recorded mouse event scripts with your graphics application (script mode)
+- Compares images from two screenshot runs using pixel-wise absolute differences (comparison mode)  
+- Opens interactive viewer for viewing two runs (and optional diff) with side-by-side, overlay, and "split" views (interactive mode)
 
-Platform támogatás:
-- **Windows**: pywinauto és Windows UI automation
-- **Linux**: X11 automation with python-xlib, psutil, és xdotool
+Platform support:
+- **Windows**: pywinauto and Windows UI automation
+- **Linux**: X11 automation with python-xlib, psutil, and xdotool
 
-Fájl: `automation_framework.py`
+Main entry point: `python src/main.py`
 
 
-## Telepítés és előkészületek
+## Installation and Setup
 
-### Windows
-0. **helper kód implementálása a saját projektedben:**
+### Prerequisites
 
-A programnak szüksége van egy olyan jól formattált stdout kimenetre, amely tartalmazza az egéreseményeket (lásd a „transzkript formátum” részt lent). Ezt a kimenetet a saját programodban kell előállítanod. Példa:
+#### Python Dependencies
+Install required Python packages:
+```bash
+pip install -r requirements.txt
+```
 
-Sajnos a hülye keretrendszer nem enged semmit importálni, így időmérést bele kell iktatni a programod loopjába:
+#### Windows
+For Windows automation support:
+```bash
+pip install pywinauto
+```
 
- 
->**FONTOS! ⚠️⚠️⚠️**
+#### Linux
+Linux dependencies:
+- **X11 server**: Ensure X11 server is running (default on most Linux desktop environments)
+- **Screenshot tools**: `scrot`, `imagemagick`, or `xwd` (at least one required)
+- **Input tools**: `xdotool` (recommended for better reliability)
+- **System packages**:
 
-> Ha nem Stealth módban futtatod a programot, azaz tervezed a beillesztett kódot feltölteni, a kódodba ékelj be néhány használatlan változót! Az alap MOSS implementációt ez az egyszerű trükk megzavarhatja. Csak a változónév átírása nem elég, ténylegesen legyenek használatlan változók a kódban. Ha csak bemásolod a kódot, az másokkal együtt növeli a plágiumdetektálás esélyét, de önmagában nem kéne, hogy átbillentse a tresholdot. Figyelj erre!
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install python3-venv python3-dev scrot imagemagick xdotool
 
->Emellett ha valaki már az adott házihoz futtatott nem stealth módban sikeres feladatot, akkor el is tudod csak kérni az stdout kimenetet tőle, így nem kell a kódodba beépíteni ezt a részt!
+# Fedora/RHEL
+sudo dnf install python3-venv python3-devel scrot ImageMagick xdotool
 
->Ha nincs ilyenre lehetőséged, és nem is akarsz kockázatot vállalni, írhatsz magadtól is egy event.txt fájlt a transzkript formátum alapján, és azt használhatod a script módhoz.
+# Arch Linux
+sudo pacman -S python-venv python-devtools scrot imagemagick xdotool
+```
+
+### Setting up the environment
+
+Create and activate a virtual environment:
+```bash
+# Using the setup script
+./create_venv_and_install.sh
+
+# Or manually
+python3 -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
+pip install -r requirements.txt
+```
 
 ```cpp
 namespace {
@@ -140,82 +171,136 @@ sudo pacman -S python-venv python-devtools scrot imagemagick xdotool
 JPortán megtalálható stdout kimenetet mentsd le egy fájlba. Az itteni kimeneti mintát meg kell valósítanod a saját programodban hogy a program felismerje az eseményeket.
 ![stdout.png](./stdout.png)
 
-## Használati példa
-
-Először futtasd a megfelelő scriptet a környezet beállításához. Ez után minden parancsot a terminálban futtass, ahol a virtuális környezet aktiválva van.
+## Usage Examples
 
 ### Windows
-2) **Futtasd a script módot az események visszajátszásához és képernyőképek mentéséhez:**
+1) **Run script mode to replay events and capture screenshots:**
 
 ```powershell
-python automation_framework.py --mode script --script events.txt --exe .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run01 --capture-delay 0.05
+python src/main.py --mode script --script events.txt --exe .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run01 --capture-delay 0.05
 ```
 
-3) **Ismételd meg a második futáshoz:**
+2) **Repeat for second run:**
 
 ```powershell
-python automation_framework.py --mode script --script events.txt --exe .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05
+python src/main.py --mode script --script events.txt --exe .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05
 ```
 
-4) **Készíts képenkénti abszolút különbségeket:**
+3) **Generate pixel-wise absolute differences:**
 
 ```powershell
-python automation_framework.py --mode comparison --inputs .\screenshots\run01 .\screenshots\run02 --output .\screenshots\comparison01
+python src/main.py --mode comparison --inputs .\screenshots\run01 .\screenshots\run02 --output .\screenshots\comparison01
 ```
 
-5) **Nézd meg interaktívan:**
+4) **View interactively:**
 
 ```powershell
-python automation_framework.py --mode interactive --inputs .\screenshots\run01 .\screenshots\run02 .\screenshots\comparison01
+python src/main.py --mode interactive --inputs .\screenshots\run01 .\screenshots\run02 .\screenshots\comparison01
 ```
 
 ### Linux
-2) **Futtasd a script módot az események visszajátszásához és képernyőképek mentéséhez:**
+1) **Run script mode to replay events and capture screenshots:**
 
 ```bash
-./run_automation.sh --mode script --script events.txt --exe ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run01 --capture-delay 0.05
+python src/main.py --mode script --script events.txt --exe ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run01 --capture-delay 0.05
 ```
 
-3) **Ismételd meg a második futáshoz:**
+2) **Repeat for second run:**
 
 ```bash
-./run_automation.sh --mode script --script events.txt --exe ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run02 --capture-delay 0.05
+python src/main.py --mode script --script events.txt --exe ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run02 --capture-delay 0.05
 ```
 
-4) **Készíts képenkénti abszolút különbségeket:**
+3) **Generate pixel-wise absolute differences:**
 
 ```bash
-./run_automation.sh --mode comparison --inputs ./screenshots/run01 ./screenshots/run02 --output ./screenshots/comparison01
+python src/main.py --mode comparison --inputs ./screenshots/run01 ./screenshots/run02 --output ./screenshots/comparison01
 ```
 
-5) **Nézd meg interaktívan:**
+4) **View interactively:**
 
 ```bash
-./run_automation.sh --mode interactive --inputs ./screenshots/run01 ./screenshots/run02 ./screenshots/comparison01
+python src/main.py --mode interactive --inputs ./screenshots/run01 ./screenshots/run02 ./screenshots/comparison01
 ```
 
-### Stealth mód (kód injektálás nélkül)
+### ⚡ Enhanced Workflow (OpenRouter AI Analysis)
 
-Ha nem szeretnél a saját programodba időbélyeget/naplózást injektálni, használhatod a stealth módot, ami egyszerűen csak képkivágásokat készít megadott időközönként egy adott időtartamon keresztül.
+#### 1. Stealth Mode Usage (Recommended - No Code Injection Required)
 
-Példa (5 másodpercig, 50 ms periódussal, 0.05 s extra késleltetéssel minden képkivágás előtt):
+```bash
+# First run (no code injection needed)
+python src/main.py --mode stealth --exe ./GreenTriangle --output ./screenshots/run01 --delta 100 --length 3000 --capture-delay 0.05
+
+# Second run (same parameters)
+python src/main.py --mode stealth --exe ./GreenTriangle --output ./screenshots/run02 --delta 100 --length 3000 --capture-delay 0.05
+```
+
+#### 2. Generate Difference Images
+
+```bash
+python src/main.py --mode comparison --inputs ./screenshots/run01 ./screenshots/run02 --output ./screenshots/comparison01
+```
+
+#### 3. AI-Powered Analysis with OpenRouter
+
+```bash
+# Set API key
+export OPENROUTER_API_KEY='your_key_here'
+
+# Run AI analysis (GPT-4o-mini model recommended)
+python src/analyze_images.py \
+    --inputs ./screenshots/run01 ./screenshots/run02 \
+    --diff-dir ./screenshots/comparison01 \
+    --output ./analysis_results \
+    --model openai/gpt-4o-mini \
+    --rate-limit 1.0
+
+# View results
+cat ./analysis_results/_summary.txt
+cat ./analysis_results/*_analysis.txt
+```
+
+#### 4. Automated Complete Workflow
+
+```bash
+# Using the analysis script (.env file automatically loaded)
+./analyze_differences.sh \
+    -a ./screenshots/run01 \
+    -b ./screenshots/run02 \
+    --diff-dir ./screenshots/comparison01 \
+    -o ./analysis_results
+
+# With environment variable
+export OPENROUTER_API_KEY='your_key_here'
+./analyze_differences.sh \
+    -a ./screenshots/run01 \
+    -b ./screenshots/run02 \
+    --diff-dir ./screenshots/comparison01 \
+    -o ./analysis_results
+```
+
+### Stealth Mode (No Code Injection Required)
+
+If you don't want to inject time stamping/logging into your own program, you can use stealth mode, which simply captures screenshots at fixed intervals for a given duration.
+
+Example (5 seconds, 50ms period, 0.05s extra delay before each screenshot):
 
 #### Windows
 ```powershell
-# Rövid forma: az EXE útvonal megadható pozicionális argumentumként is
-python automation_framework.py --mode stealth .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05 --delta 50 --length 5000
+# Short form: EXE path can be provided as positional argument
+python src/main.py --mode stealth .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05 --delta 50 --length 5000
 
-# Hivatalos forma: --exe kapcsolóval
-python automation_framework.py --mode stealth --exe .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05 --delta 50 --length 5000
+# Official form: with --exe flag
+python src/main.py --mode stealth --exe .\glProgram\x64\Debug\GreenTriangle.exe --window-title "Green triangle" --output .\screenshots\run02 --capture-delay 0.05 --delta 50 --length 5000
 ```
 
 #### Linux
 ```bash
-# Rövid forma: az EXE útvonal megadható pozicionális argumentumként is
-./run_automation.sh --mode stealth ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run02 --capture-delay 0.05 --delta 50 --length 5000
+# Short form: EXE path can be provided as positional argument
+python src/main.py --mode stealth ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run02 --capture-delay 0.05 --delta 50 --length 5000
 
-# Hivatalos forma: --exe kapcsolóval
-./run_automation.sh --mode stealth --exe ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run02 --capture-delay 0.05 --delta 50 --length 5000
+# Official form: with --exe flag
+python src/main.py --mode stealth --exe ./GreenTriangle --window-title "Green triangle" --output ./screenshots/run02 --capture-delay 0.05 --delta 50 --length 5000
 ```
 
 ## Módok
@@ -290,13 +375,49 @@ Viselkedés:
 - Indítás után készít egy kezdeti képet (`after_launch`), majd `--delta` szerint időzíti a rögzítést a megadott `--length` időtartamig, végül egy záró képet (`after_stealth`).
 - Elsődlegesen a kliens-területet vágja ki; hiba esetén teljes ablakra vagy teljes képernyőre esik vissza.
 
+## 🧪 Tesztelés és validáció
+
+### Built-in Testing
+```bash
+# Environment and dependencies check
+cd test
+python test_setup.py
+
+# OpenGL/GLFW application testing
+export DISPLAY=:0
+source .venv/bin/activate
+python src/main.py --mode stealth --exe ./test/example_executables/example1 --output ./test_run --delta 100 --length 1000
+```
+
+### Valós tesztelési eredmények
+✅ **Sikeresen tesztelve** Linux/Fedora környezetben
+✅ **Ablakkeresés javítása**: Többstratégiás detektálás (PID, cím, fallback)
+✅ **Valós alkalmazások**: GLFW/OpenGL alapú programok
+✅ **AI elemzés**: OpenRouter GPT-4o-mini sikeres integráció
+✅ **Teljes munkafolyamat**: Stealth → Comparison → AI Analysis
+✅ **Új projekt szerkezet**: Teszt fájlok a `test/` mappában
+✅ **`.env` fájl támogatás**: API kulcsok automatikus betöltése
+
+### Teljesítmény optimalizálás
+```bash
+# Ajánlott paraméterek stabil képrögzítéshez
+--delta 100          # 100ms间隔 (good balance)
+--length 3000        # 3 másodperc rögzítés
+--capture-delay 0.05 # Extra várakozás minden képhoz
+
+# Rate limiting beállítása API-hoz
+--rate-limit 1.0     # 1 másodperc a képek között
+```
+
 ## Tippek stabil, megismételhető képkivágáshoz
 
+- Használd a **stealth módot** kódinjektálás nélküli teszteléshez (ajánlott)
 - Használd a kliens-területi kivágást (alapértelmezett); az OS felület és értesítések zajt vihetnek a képekbe.
 - Adj `--capture-delay 0.03`–`0.10` másodpercet, hogy a frame teljesen kirajzolódjon.
 - Kerüld az átfedő ablakokat, tooltipeket, illetve a kézi egérmozgatást felvétel közben.
 - Tartsd állandóan az ablak méretét és a DPI skálázást a futások között.
 - Használd ugyanazt a `--window-title` értéket, és lehetőleg ne válts ablakot indítás közben.
+- **Linux/X11**: A javított ablakkeresés automatikusan alkalmazkodik - nincs szükség pontos cím megadására
 
 ## Hibaelhárítás
 
@@ -310,7 +431,13 @@ Viselkedés:
 - **"DISPLAY environment variable not set":** Győződj meg róla, hogy X11 szerver fut. Ha SSH-n keresztül dolgozol, használd az `-X` vagy `-Y` kapcsolót (`ssh -X user@host`).
 - **"No screenshot tool available":** Telepíts legalább egy screenshot eszközt: `sudo apt install scrot` vagy `sudo apt install imagemagick`.
 - **"xdotool not found":** Telepítsd a `xdotool`-t: `sudo apt install xdotool` (ajánlott jobb input kezelésért).
-- **"Failed to locate window":** Ellenőrizd a `--window-title` értékét. Linux-on a pontos ablakcím szükséges. Használd a `xprop` eszközt az ablak információk lekéréséhez: `xprop WM_NAME`.
+- **Failed to locate window**: 
+  - **Linux/X11 javított ablakkeresés**: A framework most már többféle stratégiát használ:
+    1. **Cím alapú keresés** (meglévő viselkedés)
+    2. **Folyamat alapú keresés** (új, megbízhatóbb): `xdotool search --pid`
+    3. **Bármilyen látható ablak** (fallback)
+  - Ha a régi módszer nem működik, használd a `--window-title` paramétert vagy hagyd üresen a folyamat alapú kereséshez
+  - Az ablak információk lekéréséhez használd: `xprop WM_NAME` vagy `xdotool search --class <class_name>`
 - **Permission denied a képernyőképek mentésénél:** Győződj meg róla, hogy van írási jogod a célkönyvtárban.
 - **X11 hiba: BadWindow:** Ez általában akkor történik, ha az ablak bezáródik az automatizálás közben. Növeld a `--window-timeout` értékét.
 
@@ -328,25 +455,54 @@ A parser a következőket olvassa ki:
 - Egér lenyomás/felengedés bal/jobb gombbal
 - Opcionális ablakkoordináta és világkoordináta (a visszajátszáshoz az ablakkoordinátát használja)
 
-Ezeket a módosításokat a `automation_framework.py` fájlban végezd el.
+Make these modifications in the `src/` module files as appropriate.
+
+## 🆕 Új funkciók és fejlesztések
+
+### Javított Linux/X11 ablakkeresés
+- **Többstratégiás ablakfelismerés**: A framework automatikusan próbálja:
+  1. Cím alapú keresés (legacy viselkedés)
+  2. **Folyamat ID alapú keresés** (új, megbízhatóbb)
+  3. Fallback: bármilyen látható ablak keresése
+- **Eredmény**: Sokkal megbízhatóbb ablakdetektálás különböző GUI alkalmazásoknál
+
+### Automatizált munkafolyamat
+- **`analyze_differences.sh`**: Teljes munkafolyamat egy parancsban
+- **Dry-run mód**: API költségek nélküli teszteléshez
+- **Javított hibakezelés**: Részletesebb hibajelentések és recovery opciók
 
 ## AI-alapú képelemzés (OpenRouter integráció)
 
-A `image_analysis_openrouter.py` szkript OpenRouter API-n keresztül használja a Gemini 2.5 Pro modellt a képek közötti különbségek részletes szöveges leírásához. Ez lehetővé teszi, hogy nem-multimodális LLM-ek is elemezzék a vizuális változásokat.
+A `image_analysis_openrouter.py` szkript OpenRouter API-n keresztül használja a GPT-4o-mini modellt (ajánlott) vagy más multimodális modelleket a képek közötti különbségek részletes szöveges leírásához. Ez lehetővé teszi, hogy nem-multimodális LLM-ek is elemezzék a vizuális változásokat.
 
 ### Telepítés és beállítás
 
 1. **API kulcs beszerzése:**
    - Regisztrálj az [OpenRouter](https://openrouter.ai/) oldalon
    - Generálj egy API kulcsot
-   - Állítsd be környezeti változóként: `export OPENROUTER_API_KEY=your_key_here`
+   - **Opció 1**: Szerkeszd a `.env` fájlt a projekt root-jában:
+     ```bash
+     OPENROUTER_API_KEY=your_key_here
+     ```
+   - **Opció 2**: Állítsd be környezeti változóként:
+     ```bash
+     export OPENROUTER_API_KEY=your_key_here
+     ```
 
 2. **Függőségek:**
    A `requests` csomag szükséges, ami már szerepel a `requirements.txt`-ben.
 
 ### Használat
 
-#### Alapvető használat (környezeti változóból származó API kulccsal)
+#### Alapvető használat (.env fájl használata)
+```bash
+# API kulcs beállítása a .env fájlban (automatikusan betöltve)
+python image_analysis_openrouter.py \
+    --inputs screenshots/run01 screenshots/run02 \
+    --output analysis_results
+```
+
+#### Környezeti változó használata
 ```bash
 export OPENROUTER_API_KEY=your_key_here
 
@@ -378,8 +534,21 @@ python image_analysis_openrouter.py \
     --api-key your_key_here \
     --inputs screenshots/run01 screenshots/run02 \
     --output analysis_results \
-    --model google/gemini-2.0-flash-thinking-exp:free \
+    --model openai/gpt-4o-mini \
     --prompt "Csak a színbeli különbségeket írd le részletesen"
+```
+
+#### Tesztelés API költségek nélkül (Dry Run mód)
+```bash
+python image_analysis_openrouter.py \
+    --api-key your_key_here \
+    --inputs screenshots/run01 screenshots/run02 \
+    --diff-dir screenshots/comparison01 \
+    --output analysis_results \
+    --dry-run
+
+# A dry-run request format megtekinthető:
+cat analysis_results/dry_runs/dry_run_request_*.txt
 ```
 
 ### Kimenet
@@ -401,7 +570,7 @@ Emellett létrejön egy `_summary.txt` fájl, amely összefoglalja az összes el
 - `--inputs DIR_A DIR_B`: Két bemeneti könyvtár az összehasonlítandó képekkel (kötelező)
 - `--diff-dir DIR`: Opcionális könyvtár a különbségi képekkel (amelyeket a `comparison` mód generált)
 - `--output DIR`: Kimeneti könyvtár az elemzési szövegfájlok számára (kötelező)
-- `--model NAME`: OpenRouter modell neve (alapértelmezett: `google/gemini-2.0-flash-thinking-exp:free`)
+- `--model NAME`: OpenRouter modell neve (ajánlott: `openai/gpt-4o-mini` vision elemzéshez)
 - `--prompt TEXT`: Egyéni prompt az elemzéshez (opcionális)
 - `--rate-limit FLOAT`: Késleltetés az API kérések között másodpercben (alapértelmezett: 1.0)
 - `--log-level LEVEL`: Naplózási szint (DEBUG, INFO, WARNING, ERROR)
@@ -446,13 +615,63 @@ Emellett létrejön egy `_summary.txt` fájl, amely összefoglalja az összes el
    cat analysis_results/000_0000_after_launch_analysis.txt
    ```
 
+### Példa elemzési kimenet
+
+A rendszer sikeresen elemezte a valós grafikus alkalmazásokat:
+
+**Bemenet**: 2 futás képei geometriai alakzatokkal (henger, kúp, téglatest)
+**Kimenet**: Részletes elemzés, amely tartalmazza:
+- Vizuális különbségek (pozíció, szín, méret változások)
+- Szemantikus értelmezés (animáció, állapotváltozások)
+- Kvantitatív megfigyelések (pixel elmozdulások, koordináták)
+
+### Telepített AI modellek és árak
+
+| Modell | Típus | Ár (prompt/completion) | Ajánlás |
+|--------|-------|----------------------|---------|
+| `openai/gpt-4o-mini` | Multimodális | $0.15/$0.60 per 1M token | ⭐ **Ajánlott** |
+| `google/gemini-2.0-flash-thinking-exp:free` | Ingyenes | Ingyenes | Limitált capacity |
+| `anthropic/claude-3-opus` | Multimodális | $15/$75 per 1M token | Prémium minőség |
+
 ### Megjegyzések
 
-- A szkript PNG formátumú képeket dolgoz fel
+- A szkript PNG formátumú képeket dolgo fel
 - Az API kérések között 1 másodperc késleltetés van a rate limiting miatt (módosítható a `--rate-limit` paraméterrel)
 - A modell részletes, formázatlan szöveget generál, amely könnyen feldolgozható nem-multimodális LLM-ek által
 - A különbségi képek opcionálisak, de segítik a pontosabb elemzést
 - Az elemzések UTF-8 kódolású szöveges fájlokban kerülnek mentésre
+- **Dry-run mód** elérhető a költségmentes teszteléshez
+- **Javított ablakkeresés** Linux/X11 rendszereken automatikusan alkalmazkodik a különböző GUI alkalmazásokhoz
 
-## Licenc
-MITtudom én, nem vagyok jogász, csak egy vibecoder mérnöktanonc.
+## Project Structure
+
+The project has been refactored into a modular structure:
+
+```
+grafika_differ/
+├── src/                          # Main source code
+│   ├── main.py                   # Modern entry point (replaces automation_framework.py)
+│   ├── analyze_images.py         # AI-powered image analysis
+│   ├── analysis/                 # Image analysis modules
+│   ├── core/                     # Automation framework core
+│   ├── platform/                 # Platform-specific implementations
+│   ├── ui/                       # User interface components
+│   └── utils/                    # Utility functions
+├── test/                         # Test files and examples
+├── tests/                        # Unit tests
+├── run_automation.sh            # Linux launcher (updated)
+├── analyze_differences.sh       # Complete workflow script (updated)
+└── DOCUMENTATION.md             # Detailed project documentation
+```
+
+## Migration from Legacy Code
+
+If you were using `automation_framework.py` previously, the main changes are:
+
+- **Old**: `python automation_framework.py --mode script ...`
+- **New**: `python src/main.py --mode script ...`
+
+All functionality remains the same, but the code is now better organized and maintainable.
+
+## License
+MIT

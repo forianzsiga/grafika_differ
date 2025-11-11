@@ -1,0 +1,19 @@
+__pycache__/
+
+# Environment variables
+.env
+
+# Test files and executables
+test/
+
+# Virtual environment
+.venv/
+
+# Output directories
+screenshots/
+analysis_results/
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db

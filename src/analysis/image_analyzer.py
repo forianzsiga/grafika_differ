@@ -1,40 +1,8 @@
-"""Image difference analysis using OpenRouter API with Gemini 2.5 Pro.
+"""Image analysis using OpenRouter API with AI models.
 
-This script analyzes image pairs and their differences using a multimodal LLM
-to provide detailed textual descriptions for further analysis by non-multimodal models.
-
-The script:
-1. Reads image pairs from two comparison directories
-2. Optionally includes difference images from a comparison output directory
-3. Sends images to Gemini 2.5 Pro via OpenRouter API
-4. Generates detailed textual descriptions of differences
-5. Saves analysis results as text files for each image pair
-
-Environment Variables:
-    OPENROUTER_API_KEY: Your OpenRouter API key (optional if provided via CLI)
-
-Example usage:
-    # Using environment variable for API key
-    export OPENROUTER_API_KEY=your_key_here
-    python image_analysis_openrouter.py \\
-        --inputs screenshots/run01 screenshots/run02 \\
-        --diff-dir screenshots/comparison01 \\
-        --output analysis_results
-
-    # Providing API key via command line
-    python image_analysis_openrouter.py \\
-        --api-key your_key_here \\
-        --inputs screenshots/run01 screenshots/run02 \\
-        --output analysis_results
-
-Required packages:
-    - requests
-    - pillow
-
-Install with: pip install requests pillow
+This module provides functionality to analyze image differences using
+multimodal AI models via the OpenRouter API.
 """
-
-from __future__ import annotations
 
 import argparse
 import base64
@@ -50,7 +18,7 @@ try:
     import requests
     from PIL import Image
 except ImportError as exc:
-    raise SystemExit(
+    raise ImportError(
         "Missing required dependencies. Install with 'pip install requests pillow'. Original error: %s" % exc
     )
 
@@ -106,7 +74,8 @@ class OpenRouterClient:
         image_a_path: Path,
         image_b_path: Path,
         diff_path: Optional[Path] = None,
-        prompt: Optional[str] = None
+        prompt: Optional[str] = None,
+        dry_run_output_dir: Optional[Path] = None
     ) -> str:
         """Analyze image pair with optional difference image.
         
@@ -115,13 +84,19 @@ class OpenRouterClient:
             image_b_path: Path to second image
             diff_path: Optional path to difference image
             prompt: Optional custom prompt (uses default if not provided)
+            dry_run_output_dir: Optional directory to save request details without sending
             
         Returns:
-            Analysis text from the model
+            Analysis text from the model, or "Dry run completed" message
         """
         if prompt is None:
             prompt = self._get_default_prompt(has_diff=diff_path is not None)
         
+        if dry_run_output_dir and dry_run_output_dir.exists():
+            return self._save_dry_run_request(
+                image_a_path, image_b_path, diff_path, prompt, dry_run_output_dir
+            )
+
         # Prepare message content
         content = [
             {
@@ -185,6 +160,151 @@ class OpenRouterClient:
             logging.error(f"API request failed: {e}")
             return f"Error: API request failed - {str(e)}"
     
+    def _save_dry_run_request(
+        self,
+        image_a_path: Path,
+        image_b_path: Path,
+        diff_path: Optional[Path],
+        prompt: str,
+        output_dir: Path
+    ) -> str:
+        """Save dry run request details to files without sending to API.
+        
+        Args:
+            image_a_path: Path to first image
+            image_b_path: Path to second image
+            diff_path: Optional path to difference image
+            prompt: The prompt text
+            output_dir: Directory to save request details
+            
+        Returns:
+            Success message
+        """
+        # Create readable request content
+        request_content = []
+        request_content.append("DRY RUN REQUEST - API CALL NOT MADE")
+        request_content.append("=" * 80)
+        request_content.append(f"Model: {self.model}")
+        request_content.append(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        request_content.append("")
+        
+        # Add prompt
+        request_content.append("PROMPT:")
+        request_content.append("-" * 40)
+        request_content.append(prompt)
+        request_content.append("")
+        
+        # Add image references (not base64 data)
+        request_content.append("IMAGE REFERENCES:")
+        request_content.append("-" * 40)
+        request_content.append(f"Image A: {image_a_path.absolute()}")
+        request_content.append(f"Image B: {image_b_path.absolute()}")
+        if diff_path:
+            request_content.append(f"Difference Image: {diff_path.absolute()}")
+        request_content.append("")
+        
+        # Generate filename
+        timestamp = int(time.time())
+        stem_a = image_a_path.stem
+        
+        # Save request details
+        request_filename = f"dry_run_request_{stem_a}_{timestamp}.txt"
+        request_path = output_dir / request_filename
+        with open(request_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(request_content))
+        
+        # Create mock JSON response
+        mock_response = self._create_mock_response(image_a_path, image_b_path, diff_path, prompt)
+        
+        # Save mock response
+        response_filename = f"mock_response_{stem_a}_{timestamp}.json"
+        response_path = output_dir / response_filename
+        with open(response_path, 'w', encoding='utf-8') as f:
+            json.dump(mock_response, f, indent=2)
+        
+        logging.info(f"Dry run request saved to {request_path}")
+        logging.info(f"Mock response saved to {response_path}")
+        return f"Dry run completed - request: {request_path}, response: {response_path}"
+    
+    def _create_mock_response(
+        self,
+        image_a_path: Path,
+        image_b_path: Path,
+        diff_path: Optional[Path],
+        prompt: str
+    ) -> dict:
+        """Create a mock API response that mimics OpenRouter's response format."""
+        # Generate a mock analysis text based on image names and prompt
+        stem_a = image_a_path.stem
+        stem_b = image_b_path.stem
+        
+        mock_analysis = f"""Based on the analysis of the two images, here are the key differences identified:
+
+**Visual Differences:**
+The images show different visual states, with variations in color, position, or appearance of graphical elements. The first image shows the application state at {stem_a} while the second image captures the state at {stem_b}.
+
+**Quantitative Observations:**
+- Image files analyzed: {image_a_path.absolute()} vs {image_b_path.absolute()}
+- File sizes: {image_a_path.stat().st_size} bytes vs {image_b_path.stat().st_size} bytes
+"""
+        
+        if diff_path:
+            mock_analysis += f"- Difference image provided: {diff_path.absolute()}\n"
+        
+        mock_analysis += f"""
+**Analysis Method:**
+This analysis was generated in dry run mode to demonstrate the request structure and mock response format without incurring API costs. The actual analysis would be performed by the OpenRouter API using the {self.model} model.
+
+**Data Sources:**
+- Image A: {image_a_path.absolute()}
+- Image B: {image_b_path.absolute()}
+- Difference Image: {diff_path.absolute() if diff_path else "Not provided"}
+"""
+        
+        mock_analysis += f"""
+**Technical Details:**
+- Model used: {self.model}
+- Prompt type: {'Custom' if prompt != self._get_default_prompt(diff_path is not None) else 'Default'}
+- Analysis timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}
+- Processing mode: DRY RUN (no actual API call made)
+
+**Note:** This is a mock response generated for testing and development purposes. The actual OpenRouter API would provide a real multimodal analysis of the image differences."""
+        
+        # Create mock OpenRouter API response
+        mock_response = {
+            "id": f"mock-{int(time.time())}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": self.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": mock_analysis
+                    },
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": len(mock_analysis.split()),
+                "total_tokens": len(mock_analysis.split())
+            },
+            "dry_run": {
+                "enabled": True,
+                "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+                "image_a_path": str(image_a_path.absolute()),
+                "image_b_path": str(image_b_path.absolute()),
+                "diff_path": str(diff_path.absolute()) if diff_path else None,
+                "prompt_preview": prompt[:200] + "..." if len(prompt) > 200 else prompt,
+                "request_saved": True,
+                "note": "This is a mock response. No actual API call was made to OpenRouter."
+            }
+        }
+        
+        return mock_response
+    
     def _get_default_prompt(self, has_diff: bool = False) -> str:
         """Get default analysis prompt.
         
@@ -241,7 +361,9 @@ class ImageAnalyzer:
         input_dirs: Tuple[Path, Path],
         diff_dir: Optional[Path],
         output_dir: Path,
-        rate_limit_delay: float = 1.0
+        rate_limit_delay: float = 1.0,
+        dry_run: bool = False,
+        dry_run_dir: Optional[Path] = None
     ):
         """Initialize image analyzer.
         
@@ -251,12 +373,16 @@ class ImageAnalyzer:
             diff_dir: Optional directory containing difference images
             output_dir: Directory to save analysis results
             rate_limit_delay: Delay between API requests in seconds
+            dry_run: If True, save request details without sending to API
+            dry_run_dir: Directory to save dry run requests (default: output_dir/dry_runs)
         """
         self.client = client
         self.dir_a, self.dir_b = input_dirs
         self.diff_dir = diff_dir
         self.output_dir = output_dir
         self.rate_limit_delay = rate_limit_delay
+        self.dry_run = dry_run
+        self.dry_run_dir = dry_run_dir or (output_dir / "dry_runs")
         
         # Validate directories
         for directory in [self.dir_a, self.dir_b]:
@@ -267,8 +393,10 @@ class ImageAnalyzer:
             logging.warning(f"Diff directory not found: {self.diff_dir}")
             self.diff_dir = None
         
-        # Create output directory
+        # Create output and dry run directories
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        if self.dry_run:
+            self.dry_run_dir.mkdir(parents=True, exist_ok=True)
     
     def find_image_pairs(self) -> List[Tuple[str, Path, Path, Optional[Path]]]:
         """Find matching image pairs across input directories.
@@ -329,21 +457,24 @@ class ImageAnalyzer:
                     path_a,
                     path_b,
                     diff_path,
-                    prompt=custom_prompt
+                    prompt=custom_prompt,
+                    dry_run_output_dir=self.dry_run_dir if self.dry_run else None
                 )
                 
                 # Save result
-                output_name = Path(name).stem + "_analysis.txt"
+                output_name = Path(name).stem + ("_analysis_dry_run.txt" if self.dry_run else "_analysis.txt")
                 output_path = self.output_dir / output_name
                 
                 with open(output_path, 'w', encoding='utf-8') as f:
                     # Write metadata header
-                    f.write(f"Image Pair Analysis\n")
+                    f.write(f"Image Pair Analysis{' - DRY RUN' if self.dry_run else ''}\n")
                     f.write(f"=" * 80 + "\n\n")
                     f.write(f"Image A: {path_a}\n")
                     f.write(f"Image B: {path_b}\n")
                     if diff_path:
                         f.write(f"Diff Image: {diff_path}\n")
+                    if self.dry_run:
+                        f.write(f"Dry Run Output: {self.dry_run_dir}\n")
                     f.write(f"\n" + "=" * 80 + "\n\n")
                     f.write("ANALYSIS:\n\n")
                     f.write(analysis)
@@ -366,11 +497,7 @@ class ImageAnalyzer:
         return results
     
     def _generate_summary(self, results: Dict[str, str]) -> None:
-        """Generate summary file of all analyses.
-        
-        Args:
-            results: Dictionary of analysis results
-        """
+        """Generate summary file of all analyses."""
         summary_path = self.output_dir / "_summary.txt"
         
         with open(summary_path, 'w', encoding='utf-8') as f:
@@ -383,6 +510,10 @@ class ImageAnalyzer:
             if self.diff_dir:
                 f.write(f"  - Diff: {self.diff_dir}\n")
             f.write(f"Output directory: {self.output_dir}\n")
+            if self.dry_run:
+                f.write(f"Dry run mode: enabled\n")
+                f.write(f"Dry run directory: {self.dry_run_dir}\n")
+                f.write(f"Mock JSON responses: {self.dry_run_dir}/*.json\n")
             f.write(f"\n" + "=" * 80 + "\n\n")
             
             # List all analyzed files
@@ -392,154 +523,8 @@ class ImageAnalyzer:
                 f.write(f"{idx:3d}. {name:<50s} [{status}]\n")
             
             f.write(f"\n" + "=" * 80 + "\n")
+            if self.dry_run:
+                f.write("\nDry run also saves mock JSON responses in the same directory.\n")
             f.write("\nIndividual analysis files saved as: *_analysis.txt\n")
         
         logging.info(f"Summary saved to {summary_path}")
-
-
-def _parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Analyze image differences using OpenRouter API with Gemini 2.5 Pro",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Using environment variable for API key
-  export OPENROUTER_API_KEY=your_key_here
-  python image_analysis_openrouter.py \\
-      --inputs screenshots/run01 screenshots/run02 \\
-      --output analysis_results
-
-  # With difference images
-  python image_analysis_openrouter.py \\
-      --api-key your_key_here \\
-      --inputs screenshots/run01 screenshots/run02 \\
-      --diff-dir screenshots/comparison01 \\
-      --output analysis_results
-
-  # Custom model and prompt
-  python image_analysis_openrouter.py \\
-      --api-key your_key_here \\
-      --inputs screenshots/run01 screenshots/run02 \\
-      --output analysis_results \\
-      --model google/gemini-2.0-flash-thinking-exp:free \\
-      --prompt "Describe only the color differences between these images"
-        """
-    )
-    
-    parser.add_argument(
-        "--api-key",
-        type=str,
-        help="OpenRouter API key (can also use OPENROUTER_API_KEY env variable)"
-    )
-    
-    parser.add_argument(
-        "--inputs",
-        nargs=2,
-        type=Path,
-        required=True,
-        metavar=("DIR_A", "DIR_B"),
-        help="Two input directories containing matching image files"
-    )
-    
-    parser.add_argument(
-        "--diff-dir",
-        type=Path,
-        help="Optional directory containing difference images (with _diff suffix)"
-    )
-    
-    parser.add_argument(
-        "--output",
-        type=Path,
-        required=True,
-        help="Output directory for analysis text files"
-    )
-    
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="google/gemini-2.0-flash-thinking-exp:free",
-        help="OpenRouter model to use (default: google/gemini-2.0-flash-thinking-exp:free)"
-    )
-    
-    parser.add_argument(
-        "--prompt",
-        type=str,
-        help="Custom prompt for image analysis (uses default if not provided)"
-    )
-    
-    parser.add_argument(
-        "--rate-limit",
-        type=float,
-        default=1.0,
-        help="Delay between API requests in seconds (default: 1.0)"
-    )
-    
-    parser.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)"
-    )
-    
-    return parser.parse_args()
-
-
-def main() -> None:
-    """Main entry point."""
-    args = _parse_args()
-    
-    # Configure logging
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
-    
-    # Get API key from args or environment
-    api_key = args.api_key or os.environ.get("OPENROUTER_API_KEY")
-    
-    if not api_key:
-        logging.error("API key not provided. Use --api-key or set OPENROUTER_API_KEY environment variable")
-        sys.exit(1)
-    
-    logging.info("Initializing OpenRouter client")
-    logging.info(f"Model: {args.model}")
-    
-    try:
-        # Create client
-        client = OpenRouterClient(api_key=api_key, model=args.model)
-        
-        # Create analyzer
-        analyzer = ImageAnalyzer(
-            client=client,
-            input_dirs=(args.inputs[0], args.inputs[1]),
-            diff_dir=args.diff_dir,
-            output_dir=args.output,
-            rate_limit_delay=args.rate_limit
-        )
-        
-        # Run analysis
-        logging.info("Starting image analysis")
-        results = analyzer.analyze_all(custom_prompt=args.prompt)
-        
-        # Report results
-        successful = sum(1 for r in results.values() if not r.startswith("Error:"))
-        failed = len(results) - successful
-        
-        logging.info(f"Analysis complete: {successful} successful, {failed} failed")
-        logging.info(f"Results saved to: {args.output}")
-        
-        if failed > 0:
-            sys.exit(1)
-            
-    except KeyboardInterrupt:
-        logging.info("Analysis interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        logging.error(f"Analysis failed: {e}", exc_info=True)
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()

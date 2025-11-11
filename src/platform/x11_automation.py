@@ -24,8 +24,8 @@ IS_LINUX = platform.system().lower() == "linux"
 
 if IS_LINUX:
     try:
-        from Xlib import X, display
-        from Xlib.ext import shape
+        from Xlib import X, display, XK
+        from Xlib.ext import xtest
         import psutil
         import subprocess
         import re
@@ -53,7 +53,56 @@ class X11WindowManager:
         
         for window_id, window_info in windows.items():
             window_title = self._get_window_title(window_id)
+            window_class = self._get_window_class(window_id)
+            # Check both title and class for the pattern
             if window_title and title_pattern.lower() in window_title.lower():
+                return window_id
+            if window_class and title_pattern.lower() in window_class.lower():
+                return window_id
+        return None
+    
+    def find_windows_by_process(self, pid: int) -> List[int]:
+        """Find all windows belonging to a specific process using xdotool."""
+        try:
+            # Use xdotool to search for windows by process ID
+            result = subprocess.run(
+                ['xdotool', 'search', '--pid', str(pid)],
+                capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                window_ids = []
+                for line in result.stdout.strip().split('\n'):
+                    if line.strip():
+                        try:
+                            window_ids.append(int(line.strip()))
+                        except ValueError:
+                            continue
+                return window_ids
+        except Exception as e:
+            logging.debug(f"Error finding windows by process {pid}: {e}")
+        return []
+    
+    def find_any_visible_window(self) -> Optional[int]:
+        """Find any visible window that might be our target."""
+        windows = self._get_window_tree()
+        
+        # Try to find windows with meaningful properties
+        for window_id, window_info in windows.items():
+            window_title = self._get_window_title(window_id)
+            window_class = self._get_window_class(window_id)
+            
+            # Skip windows without any identifying information
+            if not window_title and not window_class:
+                continue
+                
+            # Skip system windows (usually have no title or very generic titles)
+            if window_title and any(sys_win in window_title.lower() for sys_win in 
+                                   ['desktop', 'panel', 'taskbar', 'menu', 'system', 'root']):
+                continue
+                
+            # Return the first reasonable window we find
+            if window_title or window_class:
+                logging.debug(f"Found candidate window 0x{window_id:x}: title='{window_title}', class='{window_class}'")
                 return window_id
         return None
     
@@ -388,6 +437,60 @@ class X11Input:
             "7": 7   # scroll right
         }
         return button_map.get(button.lower())
+
+    def send_key(self, key_sym_str: str) -> bool:
+        """Send a key press and release using X11."""
+        try:
+            # Try xdotool first for better reliability
+            try:
+                cmd = ['xdotool', 'key', key_sym_str]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return True
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+            
+            # Fallback to X11 direct input
+            # Convert keysym to keycode
+            keysym = XK.string_to_keysym(key_sym_str)
+            if keysym == 0:
+                logging.error(f"Unknown keysym: {key_sym_str}")
+                return False
+            keycode = self.display.keysym_to_keycode(keysym)
+            if keycode == 0:
+                logging.error(f"Could not resolve keycode for keysym {key_sym_str}")
+                return False
+            
+            # Send press and release
+            xtest.fake_input(self.display, X.KeyPress, keycode)
+            self.display.sync()
+            time.sleep(0.05)
+            xtest.fake_input(self.display, X.KeyRelease, keycode)
+            self.display.sync()
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error sending key '{key_sym_str}': {e}")
+            return False
+
+    def send_key_to_window(self, window_id: int, key_sym_str: str) -> bool:
+        """Send a key press and release to a specific window."""
+        try:
+            # Try to set input focus to the window
+            try:
+                window = self.display.create_resource_object('window', window_id)
+                window.set_input_focus(X.RevertToParent, X.CurrentTime)
+                self.display.sync()
+                time.sleep(0.05)
+            except Exception as e:
+                logging.debug(f"Failed to set focus to window {window_id}: {e}")
+            
+            # Send the key using the send_key method
+            return self.send_key(key_sym_str)
+            
+        except Exception as e:
+            logging.error(f"Error sending key to window {window_id}: {e}")
+            return False
 
 
 class ProcessManager:

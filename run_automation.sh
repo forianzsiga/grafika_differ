@@ -24,4 +24,4 @@ if [ -f "requirements.txt" ]; then
 fi
 
 # Run the automation framework
-python automation_framework.py "$@"
+python src/main.py "$@"

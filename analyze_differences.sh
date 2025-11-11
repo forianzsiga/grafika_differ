@@ -4,6 +4,12 @@
 
 set -e  # Exit on error
 
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+    print_info "Loading environment variables from .env file"
+    export $(grep -v '^#' .env | xargs)
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -49,6 +55,8 @@ Options:
     -p, --prompt TEXT       Custom analysis prompt (optional)
     --skip-diff             Skip generating difference images if they already exist
     --rate-limit SECONDS    Delay between API calls (default: 1.0)
+    --dry-run               Save request details without sending to API (no costs)
+    --dry-run-dir DIR       Directory for dry run requests (default: output_dir/dry_runs)
     -h, --help              Show this help message
 
 Environment Variables:
@@ -63,8 +71,11 @@ Examples:
     $0 -a screenshots/run01 -b screenshots/run02 -d screenshots/comparison01
 
     # Custom output and model
-    $0 -a screenshots/run01 -b screenshots/run02 -o detailed_analysis \\
+    $0 -a screenshots/run01 -b screenshots/run02 -o detailed_analysis \
         -m google/gemini-2.0-flash-thinking-exp:free
+
+    # Dry run mode (no API costs)
+    $0 -a screenshots/run01 -b screenshots/run02 --dry-run
 
 EOF
 }
@@ -78,6 +89,8 @@ MODEL="google/gemini-2.0-flash-thinking-exp:free"
 CUSTOM_PROMPT=""
 SKIP_DIFF=false
 RATE_LIMIT="1.0"
+DRY_RUN=false
+DRY_RUN_DIR=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -111,6 +124,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --rate-limit)
             RATE_LIMIT="$2"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --dry-run-dir)
+            DRY_RUN_DIR="$2"
             shift 2
             ;;
         -h|--help)
@@ -151,6 +172,9 @@ print_info "  Directory A: $DIR_A"
 print_info "  Directory B: $DIR_B"
 print_info "  Output: $OUTPUT_DIR"
 print_info "  Model: $MODEL"
+if [ "$DRY_RUN" = true ]; then
+    print_info "  Dry run mode: ENABLED (no API calls will be made)"
+fi
 
 # Generate difference images if needed
 if [ -n "$DIFF_DIR" ]; then
@@ -158,7 +182,7 @@ if [ -n "$DIFF_DIR" ]; then
         print_info "Skipping difference generation (--skip-diff specified)"
     else
         print_info "Generating difference images..."
-        python automation_framework.py \
+        python src/main.py \
             --mode comparison \
             --inputs "$DIR_A" "$DIR_B" \
             --output "$DIFF_DIR"
@@ -173,7 +197,7 @@ if [ -n "$DIFF_DIR" ]; then
 fi
 
 # Build analysis command
-CMD="python image_analysis_openrouter.py"
+CMD="python src/analyze_images.py"
 CMD="$CMD --inputs \"$DIR_A\" \"$DIR_B\""
 CMD="$CMD --output \"$OUTPUT_DIR\""
 CMD="$CMD --model \"$MODEL\""
@@ -185,6 +209,13 @@ fi
 
 if [ -n "$CUSTOM_PROMPT" ]; then
     CMD="$CMD --prompt \"$CUSTOM_PROMPT\""
+fi
+
+if [ "$DRY_RUN" = true ]; then
+    CMD="$CMD --dry-run"
+    if [ -n "$DRY_RUN_DIR" ]; then
+        CMD="$CMD --dry-run-dir \"$DRY_RUN_DIR\""
+    fi
 fi
 
 # Run analysis
